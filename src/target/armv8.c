@@ -608,6 +608,20 @@ static int armv8_write_reg_simdfp_aarch32(struct armv8_common *armv8, int regnum
 	return retval;
 }
 
+static int armv8_mrs(struct armv8_common *armv8, uint32_t reg, uint64_t *value)
+{
+	struct arm_dpm *dpm = armv8->arm.dpm;
+
+	return (dpm->instr_read_data_r0_64(dpm, ARMV8_MRS(reg, 0), value));
+}
+
+static int armv8_msr(struct armv8_common *armv8, uint32_t reg, uint64_t value)
+{
+	struct arm_dpm *dpm = armv8->arm.dpm;
+
+	return (dpm->instr_write_data_r0_64(dpm, ARMV8_MSR_GP(reg, 0), value));
+}
+
 void armv8_select_reg_access(struct armv8_common *armv8, bool is_aarch64)
 {
 	if (is_aarch64) {
@@ -615,7 +629,8 @@ void armv8_select_reg_access(struct armv8_common *armv8, bool is_aarch64)
 		armv8->write_reg_u64 = armv8_write_reg;
 		armv8->read_reg_u128 = armv8_read_reg_simdfp_aarch64;
 		armv8->write_reg_u128 = armv8_write_reg_simdfp_aarch64;
-
+		armv8->mrs = armv8_mrs;
+		armv8->msr = armv8_msr;
 	} else {
 		armv8->read_reg_u64 = armv8_read_reg32;
 		armv8->write_reg_u64 = armv8_write_reg32;

@@ -2745,6 +2745,30 @@ static int jim_mcrmrc(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
 	return JIM_OK;
 }
 
+COMMAND_HANDLER(aarch64_handle_mrs)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct armv8_common *armv8 = target_to_armv8(target);
+	uint32_t reg;
+	uint64_t value;
+	int o0;
+	int op1;
+	int op2;
+	int crn;
+	int crm;
+	int retval;
+	if (sscanf(CMD_ARGV[0], "S%d_%d_C%d_C%d_%d", &o0, &op1, &crn, &crm, &op2) < 5)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	reg = (0b11 << 15) | (o0 << 14) | (op1 << 11) | (crn << 7) | (crm << 3) | op2;
+	retval = armv8->mrs(armv8, reg, &value);
+	if (retval != ERROR_OK)
+		return retval;
+
+	command_print(CMD_CTX, "value: 0x%016lx", value);
+	return retval;
+}
+
 static const struct command_registration aarch64_exec_command_handlers[] = {
 	{
 		.name = "cache_info",
@@ -2794,7 +2818,13 @@ static const struct command_registration aarch64_exec_command_handlers[] = {
 		.help = "read coprocessor register",
 		.usage = "cpnum op1 CRn CRm op2",
 	},
-
+	{
+		.name = "mrs",
+		.mode = COMMAND_EXEC,
+		.handler = aarch64_handle_mrs,
+		.help = "read coprocessor register",
+		.usage = "cpnum op1 CRn CRm op2",
+	},
 
 	COMMAND_REGISTRATION_DONE
 };

@@ -229,6 +229,9 @@ struct armv8_common {
 	int (*write_reg_u128)(struct armv8_common *armv8, int num,
 			uint64_t lvalue, uint64_t hvalue);
 
+	int (*mrs)(struct armv8_common *armv8, uint32_t reg, uint64_t *value);
+	int (*msr)(struct armv8_common *armv8, uint32_t reg, uint64_t value);
+
 	int (*examine_debug_reason)(struct target *target);
 	int (*post_debug_entry)(struct target *target);
 
