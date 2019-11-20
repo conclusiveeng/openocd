@@ -2757,6 +2757,7 @@ COMMAND_HANDLER(aarch64_handle_mrs)
 	int crn;
 	int crm;
 	int retval;
+
 	if (sscanf(CMD_ARGV[0], "S%d_%d_C%d_C%d_%d", &o0, &op1, &crn, &crm, &op2) < 5)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
@@ -2765,8 +2766,31 @@ COMMAND_HANDLER(aarch64_handle_mrs)
 	if (retval != ERROR_OK)
 		return retval;
 
-	command_print(CMD_CTX, "value: 0x%016lx", value);
+	command_print(CMD_CTX, "value: 0x%016" PRIx64, value);
 	return retval;
+}
+
+COMMAND_HANDLER(aarch64_handle_msr)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct armv8_common *armv8 = target_to_armv8(target);
+	uint32_t reg;
+	uint64_t value;
+	int o0;
+	int op1;
+	int op2;
+	int crn;
+	int crm;
+
+	if (sscanf(CMD_ARGV[0], "S%d_%d_C%d_C%d_%d", &o0, &op1, &crn, &crm, &op2) < 5)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	if (sscanf(CMD_ARGV[1], "0x%16" SCNx64, &value) < 1)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+	reg = (0b11 << 15) | (o0 << 14) | (op1 << 11) | (crn << 7) | (crm << 3) | op2;
+	return armv8->msr(armv8, reg, value);
+
 }
 
 static const struct command_registration aarch64_exec_command_handlers[] = {
@@ -2824,6 +2848,13 @@ static const struct command_registration aarch64_exec_command_handlers[] = {
 		.handler = aarch64_handle_mrs,
 		.help = "read coprocessor register",
 		.usage = "cpnum op1 CRn CRm op2",
+	},
+	{
+		.name = "msr",
+		.mode = COMMAND_EXEC,
+		.handler = aarch64_handle_msr,
+		.help = "write coprocessor register",
+		.usage = "cpnum op1 CRn CRm op2 value",
 	},
 
 	COMMAND_REGISTRATION_DONE
