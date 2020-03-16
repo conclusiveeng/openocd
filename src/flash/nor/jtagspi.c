@@ -59,7 +59,7 @@ static void jtagspi_set_ir(struct flash_bank *bank)
 {
 	struct jtagspi_flash_bank *info = bank->driver_priv;
 	struct scan_field field;
-	uint8_t buf[4];
+	uint8_t buf[4] = { 0 };
 
 	LOG_DEBUG("loading jtagspi ir");
 	buf_set_u32(buf, 0, info->tap->ir_length, info->ir);
@@ -427,7 +427,7 @@ static int jtagspi_info(struct flash_bank *bank, char *buf, int buf_size)
 	return ERROR_OK;
 }
 
-struct flash_driver jtagspi_flash = {
+const struct flash_driver jtagspi_flash = {
 	.name = "jtagspi",
 	.flash_bank_command = jtagspi_flash_bank_command,
 	.erase = jtagspi_erase,

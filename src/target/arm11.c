@@ -442,8 +442,8 @@ static uint32_t arm11_nextpc(struct arm11_common *arm11, int current, uint32_t a
 	}
 
 	buf_set_u32(value, 0, 32, address);
-	arm11->arm.pc->dirty = 1;
-	arm11->arm.pc->valid = 1;
+	arm11->arm.pc->dirty = true;
+	arm11->arm.pc->valid = true;
 
 	return address;
 }
@@ -1109,7 +1109,7 @@ static int arm11_target_create(struct target *target, Jim_Interp *interp)
 	if (!arm11)
 		return ERROR_FAIL;
 
-	arm11->arm.core_type = ARM_MODE_ANY;
+	arm11->arm.core_type = ARM_CORE_TYPE_STD;
 	arm_init_arch_info(target, &arm11->arm);
 
 	arm11->jtag_info.tap = target->tap;
@@ -1180,7 +1180,7 @@ static int arm11_examine(struct target *target)
 			type = "ARM1156";
 			break;
 		case 0x7B76:
-			arm11->arm.core_type = ARM_MODE_MON;
+			arm11->arm.core_type = ARM_CORE_TYPE_SEC_EXT;
 			/* NOTE: could default arm11->hardware_step to true */
 			type = "ARM1176";
 			break;

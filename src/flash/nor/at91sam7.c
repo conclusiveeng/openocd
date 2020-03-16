@@ -711,8 +711,6 @@ FLASH_BANK_COMMAND_HANDLER(at91sam7_flash_bank_command)
 	uint16_t page_size;
 	uint16_t num_nvmbits;
 
-	char *target_name_t;
-
 	int bnk, sec;
 
 	at91sam7_info = malloc(sizeof(struct at91sam7_flash_bank));
@@ -753,9 +751,6 @@ FLASH_BANK_COMMAND_HANDLER(at91sam7_flash_bank_command)
 		return ERROR_OK;
 	}
 
-	target_name_t = calloc(strlen(CMD_ARGV[7]) + 1, sizeof(char));
-	strcpy(target_name_t, CMD_ARGV[7]);
-
 	/* calculate bank size  */
 	bank_size = num_sectors * pages_per_sector * page_size;
 
@@ -794,7 +789,7 @@ FLASH_BANK_COMMAND_HANDLER(at91sam7_flash_bank_command)
 
 		at91sam7_info = t_bank->driver_priv;
 
-		at91sam7_info->target_name  = target_name_t;
+		at91sam7_info->target_name = strdup(CMD_ARGV[7]);
 		at91sam7_info->flashmode = 0;
 		at91sam7_info->ext_freq  = ext_freq;
 		at91sam7_info->num_nvmbits = num_nvmbits;
@@ -1067,7 +1062,7 @@ COMMAND_HANDLER(at91sam7_handle_gpnvm_command)
 	if (bank ==  NULL)
 		return ERROR_FLASH_BANK_INVALID;
 	if (strcmp(bank->driver->name, "at91sam7")) {
-		command_print(CMD_CTX, "not an at91sam7 flash bank '%s'", CMD_ARGV[0]);
+		command_print(CMD, "not an at91sam7 flash bank '%s'", CMD_ARGV[0]);
 		return ERROR_FLASH_BANK_INVALID;
 	}
 	if (bank->target->state != TARGET_HALTED) {
@@ -1091,7 +1086,7 @@ COMMAND_HANDLER(at91sam7_handle_gpnvm_command)
 
 	COMMAND_PARSE_NUMBER(int, CMD_ARGV[0], bit);
 	if ((bit < 0) || (bit >= at91sam7_info->num_nvmbits)) {
-		command_print(CMD_CTX,
+		command_print(CMD,
 			"gpnvm bit '#%s' is out of bounds for target %s",
 			CMD_ARGV[0],
 			at91sam7_info->target_name);
@@ -1140,7 +1135,7 @@ static const struct command_registration at91sam7_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-struct flash_driver at91sam7_flash = {
+const struct flash_driver at91sam7_flash = {
 	.name = "at91sam7",
 	.usage = "gpnvm <bit> <set | clear>",
 	.commands = at91sam7_command_handlers,

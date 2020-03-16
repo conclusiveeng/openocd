@@ -1216,7 +1216,7 @@ static int numicro_init_isp(struct target *target)
 	return ERROR_OK;
 }
 
-static uint32_t numicro_fmc_cmd(struct target *target, uint32_t cmd, uint32_t addr, uint32_t wdata, uint32_t* rdata)
+static uint32_t numicro_fmc_cmd(struct target *target, uint32_t cmd, uint32_t addr, uint32_t wdata, uint32_t *rdata)
 {
 	uint32_t timeout, status;
 	int retval = ERROR_OK;
@@ -1496,7 +1496,8 @@ static int numicro_erase(struct flash_bank *bank, int first, int last)
 		return retval;
 
 	for (i = first; i <= last; i++) {
-		LOG_DEBUG("erasing sector %d at address 0x%" PRIx32 "", i, bank->base + bank->sectors[i].offset);
+		LOG_DEBUG("erasing sector %d at address " TARGET_ADDR_FMT, i,
+				bank->base + bank->sectors[i].offset);
 		retval = target_write_u32(target, NUMICRO_FLASH_ISPADR, bank->base + bank->sectors[i].offset);
 		if (retval != ERROR_OK)
 			return retval;
@@ -1547,7 +1548,6 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 {
 	struct target *target = bank->target;
 	uint32_t timeout, status;
-	uint8_t *new_buffer = NULL;
 	int retval = ERROR_OK;
 
 	if (target->state != TARGET_HALTED) {
@@ -1565,20 +1565,8 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 	if (retval != ERROR_OK)
 		return retval;
 
-	if (count & 0x3) {
-		uint32_t old_count = count;
-		count = (old_count | 3) + 1;
-		new_buffer = malloc(count);
-		if (new_buffer == NULL) {
-			LOG_ERROR("odd number of bytes to write and no memory "
-				"for padding buffer");
-			return ERROR_FAIL;
-		}
-		LOG_INFO("odd number of bytes to write (%d), extending to %d "
-			"and padding with 0xff", old_count, count);
-		memset(new_buffer, 0xff, count);
-		buffer = memcpy(new_buffer, buffer, old_count);
-	}
+	assert(offset % 4 == 0);
+	assert(count % 4 == 0);
 
 	uint32_t words_remaining = count / 4;
 
@@ -1596,13 +1584,10 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 
 			LOG_DEBUG("write longword @ %08X", offset + i);
 
-			uint8_t padding[4] = {0xff, 0xff, 0xff, 0xff};
-			memcpy(padding, buffer + i, MIN(4, count-i));
-
 			retval = target_write_u32(target, NUMICRO_FLASH_ISPADR, bank->base + offset + i);
 			if (retval != ERROR_OK)
 				return retval;
-			retval = target_write_memory(target, NUMICRO_FLASH_ISPDAT, 4, 1, padding);
+			retval = target_write_memory(target, NUMICRO_FLASH_ISPDAT, 4, 1, buffer + i);
 			if (retval != ERROR_OK)
 				return retval;
 			retval = target_write_u32(target, NUMICRO_FLASH_ISPTRG, ISPTRG_ISPGO);
@@ -1648,7 +1633,7 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 	return ERROR_OK;
 }
 
-static int numicro_get_cpu_type(struct target *target, const struct numicro_cpu_type** cpu)
+static int numicro_get_cpu_type(struct target *target, const struct numicro_cpu_type **cpu)
 {
 	uint32_t part_id;
 	int retval = ERROR_OK;
@@ -1662,7 +1647,7 @@ static int numicro_get_cpu_type(struct target *target, const struct numicro_cpu_
 
 	LOG_INFO("Device ID: 0x%08" PRIx32 "", part_id);
 	/* search part numbers */
-	for (size_t i = 0; i < sizeof(NuMicroParts)/sizeof(NuMicroParts[0]); i++) {
+	for (size_t i = 0; i < ARRAY_SIZE(NuMicroParts); i++) {
 		if (part_id == NuMicroParts[i].partid) {
 			*cpu = &NuMicroParts[i];
 			LOG_INFO("Device Name: %s", (*cpu)->partname);
@@ -1678,7 +1663,8 @@ static int numicro_get_flash_size(struct flash_bank *bank, const struct numicro_
 	for (size_t i = 0; i < cpu->n_banks; i++) {
 		if (bank->base == cpu->bank[i].base) {
 			*flash_size = cpu->bank[i].size;
-			LOG_INFO("bank base = 0x%08" PRIx32 ", size = 0x%08" PRIx32 "", bank->base, *flash_size);
+			LOG_INFO("bank base = " TARGET_ADDR_FMT ", size = 0x%08"
+					PRIx32, bank->base, *flash_size);
 			return ERROR_OK;
 		}
 	}
@@ -1752,6 +1738,7 @@ FLASH_BANK_COMMAND_HANDLER(numicro_flash_bank_command)
 	memset(bank_info, 0, sizeof(struct numicro_flash_bank));
 
 	bank->driver_priv = bank_info;
+	bank->write_start_alignment = bank->write_end_alignment = 4;
 
 	return ERROR_OK;
 
@@ -1825,11 +1812,11 @@ COMMAND_HANDLER(numicro_handle_chip_erase_command)
 
 	retval = numicro_fmc_cmd(target, ISPCMD_CHIPERASE, 0, 0, &rdat);
 	if (retval != ERROR_OK) {
-		command_print(CMD_CTX, "numicro chip_erase failed");
+		command_print(CMD, "numicro chip_erase failed");
 		return retval;
 	}
 
-	command_print(CMD_CTX, "numicro chip_erase complete");
+	command_print(CMD, "numicro chip_erase complete");
 
 	return ERROR_OK;
 }
@@ -1854,6 +1841,7 @@ static const struct command_registration numicro_exec_command_handlers[] = {
 		.handler = numicro_handle_chip_erase_command,
 		.mode = COMMAND_EXEC,
 		.help = "chip erase through ISP.",
+		.usage = "",
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -1869,7 +1857,7 @@ static const struct command_registration numicro_command_handlers[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-struct flash_driver numicro_flash = {
+const struct flash_driver numicro_flash = {
 	.name = "numicro",
 	.commands = numicro_command_handlers,
 	.flash_bank_command = numicro_flash_bank_command,

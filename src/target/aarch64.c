@@ -29,6 +29,8 @@
 #include "armv8_opcodes.h"
 #include "armv8_cache.h"
 #include "arm_semihosting.h"
+#include "jtag/interface.h"
+#include "smp.h"
 #include <helper/time_support.h>
 
 enum restart_mode {
@@ -62,9 +64,6 @@ static int aarch64_virt2phys(struct target *target,
 	target_addr_t virt, target_addr_t *phys);
 static int aarch64_read_cpu_memory(struct target *target,
 	uint64_t address, uint32_t size, uint32_t count, uint8_t *buffer);
-
-#define foreach_smp_target(pos, head) \
-	for (pos = head; (pos != NULL); pos = pos->next)
 
 static int aarch64_restore_system_control_reg(struct target *target)
 {
@@ -601,8 +600,8 @@ static int aarch64_restore_one(struct target *target, int current,
 	}
 	LOG_DEBUG("resume pc = 0x%016" PRIx64, resume_pc);
 	buf_set_u64(arm->pc->value, 0, 64, resume_pc);
-	arm->pc->dirty = 1;
-	arm->pc->valid = 1;
+	arm->pc->dirty = true;
+	arm->pc->valid = true;
 
 	/* called it now before restoring context because it uses cpu
 	 * register r0 for restoring system control register */
@@ -1177,7 +1176,7 @@ static int aarch64_step(struct target *target, int current, target_addr_t addres
 	if (saved_retval != ERROR_OK)
 		return saved_retval;
 
-	return aarch64_poll(target);
+	return ERROR_OK;
 }
 
 static int aarch64_restore_context(struct target *target, bool bpwp)
@@ -1264,9 +1263,32 @@ static int aarch64_set_breakpoint(struct target *target,
 			brp_list[brp_i].value);
 
 	} else if (breakpoint->type == BKPT_SOFT) {
+		uint32_t opcode;
 		uint8_t code[4];
 
-		buf_set_u32(code, 0, 32, armv8_opcode(armv8, ARMV8_OPC_HLT));
+		if (armv8_dpm_get_core_state(&armv8->dpm) == ARM_STATE_AARCH64) {
+			opcode = ARMV8_HLT(11);
+
+			if (breakpoint->length != 4)
+				LOG_ERROR("bug: breakpoint length should be 4 in AArch64 mode");
+		} else {
+			/**
+			 * core_state is ARM_STATE_ARM
+			 * in that case the opcode depends on breakpoint length:
+			 *  - if length == 4 => A32 opcode
+			 *  - if length == 2 => T32 opcode
+			 *  - if length == 3 => T32 opcode (refer to gdb doc : ARM-Breakpoint-Kinds)
+			 *    in that case the length should be changed from 3 to 4 bytes
+			 **/
+			opcode = (breakpoint->length == 4) ? ARMV8_HLT_A1(11) :
+					(uint32_t) (ARMV8_HLT_T1(11) | ARMV8_HLT_T1(11) << 16);
+
+			if (breakpoint->length == 3)
+				breakpoint->length = 4;
+		}
+
+		buf_set_u32(code, 0, 32, opcode);
+
 		retval = target_read_memory(target,
 				breakpoint->address & 0xFFFFFFFFFFFFFFFE,
 				breakpoint->length, 1,
@@ -1664,7 +1686,7 @@ static int aarch64_assert_reset(struct target *target)
 		/* REVISIT handle "pulls" cases, if there's
 		 * hardware that needs them to work.
 		 */
-		jtag_add_reset(0, 1);
+		adapter_assert_reset();
 	} else {
 		LOG_ERROR("%s: how to reset?", target_name(target));
 		return ERROR_FAIL;
@@ -1688,7 +1710,7 @@ static int aarch64_deassert_reset(struct target *target)
 	LOG_DEBUG(" ");
 
 	/* be certain SRST is off */
-	jtag_add_reset(0, 0);
+	adapter_deassert_reset();
 
 	if (!target_was_examined(target))
 		return ERROR_OK;
@@ -2388,7 +2410,8 @@ static int aarch64_init_arch_info(struct target *target,
 	armv8->armv8_mmu.read_physical_memory = aarch64_read_phys_memory;
 
 	armv8_init_arch_info(target, armv8);
-	target_register_timer_callback(aarch64_handle_target_request, 1, 1, target);
+	target_register_timer_callback(aarch64_handle_target_request, 1,
+		TARGET_TIMER_TYPE_PERIODIC, target);
 
 	return ERROR_OK;
 }
@@ -2396,10 +2419,16 @@ static int aarch64_init_arch_info(struct target *target,
 static int aarch64_target_create(struct target *target, Jim_Interp *interp)
 {
 	struct aarch64_private_config *pc = target->private_config;
-	struct aarch64_common *aarch64 = calloc(1, sizeof(struct aarch64_common));
+	struct aarch64_common *aarch64;
 
 	if (adiv5_verify_config(&pc->adiv5_config) != ERROR_OK)
 		return ERROR_FAIL;
+
+	aarch64 = calloc(1, sizeof(struct aarch64_common));
+	if (aarch64 == NULL) {
+		LOG_ERROR("Out of memory");
+		return ERROR_FAIL;
+	}
 
 	return aarch64_init_arch_info(target, aarch64, pc->adiv5_config.dap);
 }
@@ -2528,7 +2557,7 @@ COMMAND_HANDLER(aarch64_handle_cache_info_command)
 	struct target *target = get_current_target(CMD_CTX);
 	struct armv8_common *armv8 = target_to_armv8(target);
 
-	return armv8_handle_cache_info_command(CMD_CTX,
+	return armv8_handle_cache_info_command(CMD,
 			&armv8->armv8_mmu.armv8_cache);
 }
 
@@ -2542,42 +2571,6 @@ COMMAND_HANDLER(aarch64_handle_dbginit_command)
 	}
 
 	return aarch64_init_debug_access(target);
-}
-COMMAND_HANDLER(aarch64_handle_smp_off_command)
-{
-	struct target *target = get_current_target(CMD_CTX);
-	/* check target is an smp target */
-	struct target_list *head;
-	struct target *curr;
-	head = target->head;
-	target->smp = 0;
-	if (head != (struct target_list *)NULL) {
-		while (head != (struct target_list *)NULL) {
-			curr = head->target;
-			curr->smp = 0;
-			head = head->next;
-		}
-		/*  fixes the target display to the debugger */
-		target->gdb_service->target = target;
-	}
-	return ERROR_OK;
-}
-
-COMMAND_HANDLER(aarch64_handle_smp_on_command)
-{
-	struct target *target = get_current_target(CMD_CTX);
-	struct target_list *head;
-	struct target *curr;
-	head = target->head;
-	if (head != (struct target_list *)NULL) {
-		target->smp = 1;
-		while (head != (struct target_list *)NULL) {
-			curr = head->target;
-			curr->smp = 1;
-			head = head->next;
-		}
-	}
-	return ERROR_OK;
 }
 
 COMMAND_HANDLER(aarch64_mask_interrupts_command)
@@ -2603,7 +2596,7 @@ COMMAND_HANDLER(aarch64_mask_interrupts_command)
 	}
 
 	n = Jim_Nvp_value2name_simple(nvp_maskisr_modes, aarch64->isrmasking_mode);
-	command_print(CMD_CTX, "aarch64 interrupt mask %s", n->name);
+	command_print(CMD, "aarch64 interrupt mask %s", n->name);
 
 	return ERROR_OK;
 }
@@ -2808,19 +2801,6 @@ static const struct command_registration aarch64_exec_command_handlers[] = {
 		.help = "Initialize core debug",
 		.usage = "",
 	},
-	{	.name = "smp_off",
-		.handler = aarch64_handle_smp_off_command,
-		.mode = COMMAND_EXEC,
-		.help = "Stop smp handling",
-		.usage = "",
-	},
-	{
-		.name = "smp_on",
-		.handler = aarch64_handle_smp_on_command,
-		.mode = COMMAND_EXEC,
-		.help = "Restart smp handling",
-		.usage = "",
-	},
 	{
 		.name = "maskisr",
 		.handler = aarch64_mask_interrupts_command,
@@ -2856,11 +2836,23 @@ static const struct command_registration aarch64_exec_command_handlers[] = {
 		.help = "write coprocessor register",
 		.usage = "cpnum op1 CRn CRm op2 value",
 	},
+	{
+		.chain = smp_command_handlers,
+	},
 
 	COMMAND_REGISTRATION_DONE
 };
 
+extern const struct command_registration semihosting_common_handlers[];
+
 static const struct command_registration aarch64_command_handlers[] = {
+	{
+		.name = "arm",
+		.mode = COMMAND_ANY,
+		.help = "ARM Command Group",
+		.usage = "",
+		.chain = semihosting_common_handlers
+	},
 	{
 		.chain = armv8_command_handlers,
 	},
