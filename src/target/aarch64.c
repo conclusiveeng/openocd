@@ -2759,7 +2759,7 @@ COMMAND_HANDLER(aarch64_handle_mrs)
 	if (retval != ERROR_OK)
 		return retval;
 
-	command_print(CMD_CTX, "value: 0x%016" PRIx64, value);
+	command_print(CMD, "value: 0x%016" PRIx64, value);
 	return retval;
 }
 
