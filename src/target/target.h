@@ -32,6 +32,7 @@
 #define OPENOCD_TARGET_TARGET_H
 
 #include <helper/list.h>
+#include <jim.h>
 
 struct reg;
 struct trace;
@@ -258,6 +259,8 @@ enum target_event {
 	TARGET_EVENT_RESUMED,		/* target resumed to normal execution */
 	TARGET_EVENT_RESUME_START,
 	TARGET_EVENT_RESUME_END,
+	TARGET_EVENT_STEP_START,
+	TARGET_EVENT_STEP_END,
 
 	TARGET_EVENT_GDB_START, /* debugger started execution (step/run) */
 	TARGET_EVENT_GDB_END, /* debugger stopped execution (step/run) */
@@ -291,8 +294,8 @@ enum target_event {
 
 struct target_event_action {
 	enum target_event event;
-	struct Jim_Interp *interp;
-	struct Jim_Obj *body;
+	Jim_Interp *interp;
+	Jim_Obj *body;
 	struct target_event_action *next;
 };
 
@@ -745,6 +748,9 @@ void target_handle_md_output(struct command_invocation *cmd,
 	struct target *target, target_addr_t address, unsigned size,
 	unsigned count, const uint8_t *buffer);
 
+int target_profiling_default(struct target *target, uint32_t *samples, uint32_t
+		max_num_samples, uint32_t *num_samples, uint32_t seconds);
+
 #define ERROR_TARGET_INVALID	(-300)
 #define ERROR_TARGET_INIT_FAILED (-301)
 #define ERROR_TARGET_TIMEOUT	(-302)
@@ -757,6 +763,7 @@ void target_handle_md_output(struct command_invocation *cmd,
 #define ERROR_TARGET_NOT_RUNNING (-310)
 #define ERROR_TARGET_NOT_EXAMINED (-311)
 #define ERROR_TARGET_DUPLICATE_BREAKPOINT (-312)
+#define ERROR_TARGET_ALGO_EXIT  (-313)
 
 extern bool get_target_reset_nag(void);
 

@@ -555,11 +555,11 @@ static int ftdi_reset(int trst, int srst)
 
 static void ftdi_execute_sleep(struct jtag_command *cmd)
 {
-	LOG_DEBUG_IO("sleep %" PRIi32, cmd->cmd.sleep->us);
+	LOG_DEBUG_IO("sleep %" PRIu32, cmd->cmd.sleep->us);
 
 	mpsse_flush(mpsse_ctx);
 	jtag_sleep(cmd->cmd.sleep->us);
-	LOG_DEBUG_IO("sleep %" PRIi32 " usec while in %s",
+	LOG_DEBUG_IO("sleep %" PRIu32 " usec while in %s",
 		cmd->cmd.sleep->us,
 		tap_state_name(tap_get_state()));
 }
@@ -647,6 +647,11 @@ static int ftdi_initialize(void)
 	else
 		LOG_DEBUG("ftdi interface using shortest path jtag state transitions");
 
+	if (!ftdi_vid[0] && !ftdi_pid[0]) {
+		LOG_ERROR("Please specify ftdi_vid_pid");
+		return ERROR_JTAG_INIT_FAILED;
+	}
+
 	for (int i = 0; ftdi_vid[i] || ftdi_pid[i]; i++) {
 		mpsse_ctx = mpsse_open(&ftdi_vid[i], &ftdi_pid[i], ftdi_device_desc,
 				ftdi_serial, jtag_usb_get_location(), ftdi_channel);
@@ -704,8 +709,7 @@ static int ftdi_quit(void)
 COMMAND_HANDLER(ftdi_handle_device_desc_command)
 {
 	if (CMD_ARGC == 1) {
-		if (ftdi_device_desc)
-			free(ftdi_device_desc);
+		free(ftdi_device_desc);
 		ftdi_device_desc = strdup(CMD_ARGV[0]);
 	} else {
 		LOG_ERROR("expected exactly one argument to ftdi_device_desc <description>");
@@ -717,8 +721,7 @@ COMMAND_HANDLER(ftdi_handle_device_desc_command)
 COMMAND_HANDLER(ftdi_handle_serial_command)
 {
 	if (CMD_ARGC == 1) {
-		if (ftdi_serial)
-			free(ftdi_serial);
+		free(ftdi_serial);
 		ftdi_serial = strdup(CMD_ARGV[0]);
 	} else {
 		return ERROR_COMMAND_SYNTAX_ERROR;

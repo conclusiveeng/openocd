@@ -7,6 +7,7 @@ endif
 %C%_libtarget_la_LIBADD = %D%/openrisc/libopenrisc.la \
 	%D%/riscv/libriscv.la
 
+%C%_libtarget_la_CPPFLAGS = $(AM_CPPFLAGS)
 
 STARTUP_TCL_SRCS += %D%/startup.tcl
 
@@ -29,11 +30,13 @@ noinst_LTLIBRARIES += %D%/libtarget.la
 	%D%/dsp563xx.c \
 	%D%/dsp563xx_once.c \
 	%D%/dsp5680xx.c \
-	%D%/hla_target.c
+	%D%/hla_target.c \
+	$(ARMV8_SRC) \
+	$(MIPS64_SRC)
 
-if TARGET64
-%C%_libtarget_la_SOURCES +=$(ARMV8_SRC)
-%C%_libtarget_la_SOURCES +=$(MIPS64_SRC)
+if HAVE_CAPSTONE
+%C%_libtarget_la_CPPFLAGS += $(CAPSTONE_CFLAGS)
+%C%_libtarget_la_LIBADD += $(CAPSTONE_LIBS)
 endif
 
 TARGET_CORE_SRC = \
@@ -86,6 +89,7 @@ ARMV8_SRC = \
 	%D%/armv8_dpm.c \
 	%D%/armv8_opcodes.c \
 	%D%/aarch64.c \
+	%D%/a64_disassembler.c \
 	%D%/armv8.c \
 	%D%/armv8_cache.c
 
@@ -173,6 +177,7 @@ ARC_SRC = \
 	%D%/armv7a_cache_l2x.h \
 	%D%/armv7a_mmu.h \
 	%D%/arm_disassembler.h \
+	%D%/a64_disassembler.h \
 	%D%/arm_opcodes.h \
 	%D%/arm_simulator.h \
 	%D%/arm_semihosting.h \

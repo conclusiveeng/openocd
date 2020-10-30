@@ -113,7 +113,7 @@ static int cortexm_dap_write_coreregister_u32(struct target *target,
 		return retval;
 
 	if (target->dbg_msg_enabled) {
-		/* restore DCB_DCRDR - this needs to be in a seperate
+		/* restore DCB_DCRDR - this needs to be in a separate
 		 * transaction otherwise the emulated DCC channel breaks */
 		if (retval == ERROR_OK)
 			retval = mem_ap_write_atomic_u32(armv7m->debug_ap, DCB_DCRDR, dcrdr);
@@ -129,7 +129,7 @@ static int cortex_m_write_debug_halt_mask(struct target *target,
 	struct armv7m_common *armv7m = &cortex_m->armv7m;
 
 	/* mask off status bits */
-	cortex_m->dcb_dhcsr &= ~((0xFFFF << 16) | mask_off);
+	cortex_m->dcb_dhcsr &= ~((0xFFFFul << 16) | mask_off);
 	/* create new register mask */
 	cortex_m->dcb_dhcsr |= DBGKEY | C_DEBUGEN | mask_on;
 
@@ -445,6 +445,14 @@ static int cortex_m_examine_exception_reason(struct target *target)
 			if (retval != ERROR_OK)
 				return retval;
 			break;
+		case 7:	/* Secure Fault */
+			retval = mem_ap_read_u32(armv7m->debug_ap, NVIC_SFSR, &except_sr);
+			if (retval != ERROR_OK)
+				return retval;
+			retval = mem_ap_read_u32(armv7m->debug_ap, NVIC_SFAR, &except_ar);
+			if (retval != ERROR_OK)
+				return retval;
+			break;
 		case 11:	/* SVCall */
 			break;
 		case 12:	/* Debug Monitor */
@@ -494,6 +502,18 @@ static int cortex_m_debug_entry(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
+	/* examine PE security state */
+	bool secure_state = false;
+	if (armv7m->arm.is_armv8m) {
+		uint32_t dscsr;
+
+		retval = mem_ap_read_u32(armv7m->debug_ap, DCB_DSCSR, &dscsr);
+		if (retval != ERROR_OK)
+			return retval;
+
+		secure_state = (dscsr & DSCSR_CDS) == DSCSR_CDS;
+	}
+
 	/* Examine target state and mode
 	 * First load register accessible through core debug port */
 	int num_regs = arm->core_cache->num_regs;
@@ -521,7 +541,7 @@ static int cortex_m_debug_entry(struct target *target)
 		arm->map = armv7m_msp_reg_map;
 	} else {
 		unsigned control = buf_get_u32(arm->core_cache
-				->reg_list[ARMV7M_CONTROL].value, 0, 2);
+				->reg_list[ARMV7M_CONTROL].value, 0, 3);
 
 		/* is this thread privileged? */
 		arm->core_mode = control & 1
@@ -540,9 +560,10 @@ static int cortex_m_debug_entry(struct target *target)
 	if (armv7m->exception_number)
 		cortex_m_examine_exception_reason(target);
 
-	LOG_DEBUG("entered debug state in core mode: %s at PC 0x%" PRIx32 ", target->state: %s",
+	LOG_DEBUG("entered debug state in core mode: %s at PC 0x%" PRIx32 ", cpu in %s state, target->state: %s",
 		arm_mode_name(arm->core_mode),
 		buf_get_u32(arm->pc->value, 0, 32),
+		secure_state ? "Secure" : "Non-Secure",
 		target_state_name(target));
 
 	if (armv7m->post_debug_entry) {
@@ -710,11 +731,11 @@ static int cortex_m_soft_reset_halt(struct target *target)
 	uint32_t dcb_dhcsr = 0;
 	int retval, timeout = 0;
 
-	/* soft_reset_halt is deprecated on cortex_m as the same functionality
-	 * can be obtained by using 'reset halt' and 'cortex_m reset_config vectreset'
-	 * As this reset only used VC_CORERESET it would only ever reset the cortex_m
+	/* on single cortex_m MCU soft_reset_halt should be avoided as same functionality
+	 * can be obtained by using 'reset halt' and 'cortex_m reset_config vectreset'.
+	 * As this reset only uses VC_CORERESET it would only ever reset the cortex_m
 	 * core, not the peripherals */
-	LOG_WARNING("soft_reset_halt is deprecated, please use 'reset halt' instead.");
+	LOG_DEBUG("soft_reset_halt is discouraged, please use 'reset halt' instead.");
 
 	/* Set C_DEBUGEN */
 	retval = cortex_m_write_debug_halt_mask(target, 0, C_STEP | C_MASKINTS);
@@ -951,7 +972,7 @@ static int cortex_m_step(struct target *target, int current,
 			 * just step over the instruction with interrupts disabled.
 			 *
 			 * The documentation has no information about this, it was found by observation
-			 * on STM32F1 and STM32F2. Proper explanation welcome. STM32F0 dosen't seem to
+			 * on STM32F1 and STM32F2. Proper explanation welcome. STM32F0 doesn't seem to
 			 * suffer from this problem.
 			 *
 			 * To add some confusion: pc_value has bit 0 always set, while the breakpoint
@@ -966,8 +987,7 @@ static int cortex_m_step(struct target *target, int current,
 				/* Re-enable interrupts if appropriate */
 				cortex_m_write_debug_halt_mask(target, C_HALT, 0);
 				cortex_m_set_maskints_for_halt(target);
-			}
-			else {
+			} else {
 
 				/* Set a temporary break point */
 				if (breakpoint) {
@@ -1658,7 +1678,7 @@ static int cortex_m_load_core_reg_u32(struct target *target,
 					break;
 
 				case ARMV7M_CONTROL:
-					*value = buf_get_u32((uint8_t *)value, 24, 2);
+					*value = buf_get_u32((uint8_t *)value, 24, 3);
 					break;
 			}
 
@@ -1744,7 +1764,7 @@ static int cortex_m_store_core_reg_u32(struct target *target,
 					break;
 
 				case ARMV7M_CONTROL:
-					buf_set_u32((uint8_t *)&reg, 24, 2, value);
+					buf_set_u32((uint8_t *)&reg, 24, 3, value);
 					break;
 			}
 
@@ -1815,27 +1835,22 @@ int cortex_m_profiling(struct target *target, uint32_t *samples,
 	struct timeval timeout, now;
 	struct armv7m_common *armv7m = target_to_armv7m(target);
 	uint32_t reg_value;
-	bool use_pcsr = false;
-	int retval = ERROR_OK;
-	struct reg *reg;
-
-	gettimeofday(&timeout, NULL);
-	timeval_add_time(&timeout, seconds, 0);
+	int retval;
 
 	retval = target_read_u32(target, DWT_PCSR, &reg_value);
 	if (retval != ERROR_OK) {
 		LOG_ERROR("Error while reading PCSR");
 		return retval;
 	}
-
-	if (reg_value != 0) {
-		use_pcsr = true;
-		LOG_INFO("Starting Cortex-M profiling. Sampling DWT_PCSR as fast as we can...");
-	} else {
-		LOG_INFO("Starting profiling. Halting and resuming the"
-			 " target as often as we can...");
-		reg = register_get_by_name(target->reg_cache, "pc", 1);
+	if (reg_value == 0) {
+		LOG_INFO("PCSR sampling not supported on this processor.");
+		return target_profiling_default(target, samples, max_num_samples, num_samples, seconds);
 	}
+
+	gettimeofday(&timeout, NULL);
+	timeval_add_time(&timeout, seconds, 0);
+
+	LOG_INFO("Starting Cortex-M profiling. Sampling DWT_PCSR as fast as we can...");
 
 	/* Make sure the target is running */
 	target_poll(target);
@@ -1850,40 +1865,21 @@ int cortex_m_profiling(struct target *target, uint32_t *samples,
 	uint32_t sample_count = 0;
 
 	for (;;) {
-		if (use_pcsr) {
-			if (armv7m && armv7m->debug_ap) {
-				uint32_t read_count = max_num_samples - sample_count;
-				if (read_count > 1024)
-					read_count = 1024;
+		if (armv7m && armv7m->debug_ap) {
+			uint32_t read_count = max_num_samples - sample_count;
+			if (read_count > 1024)
+				read_count = 1024;
 
-				retval = mem_ap_read_buf_noincr(armv7m->debug_ap,
-							(void *)&samples[sample_count],
-							4, read_count, DWT_PCSR);
-				sample_count += read_count;
-			} else {
-				target_read_u32(target, DWT_PCSR, &samples[sample_count++]);
-			}
+			retval = mem_ap_read_buf_noincr(armv7m->debug_ap,
+						(void *)&samples[sample_count],
+						4, read_count, DWT_PCSR);
+			sample_count += read_count;
 		} else {
-			target_poll(target);
-			if (target->state == TARGET_HALTED) {
-				reg_value = buf_get_u32(reg->value, 0, 32);
-				/* current pc, addr = 0, do not handle breakpoints, not debugging */
-				retval = target_resume(target, 1, 0, 0, 0);
-				samples[sample_count++] = reg_value;
-				target_poll(target);
-				alive_sleep(10); /* sleep 10ms, i.e. <100 samples/second. */
-			} else if (target->state == TARGET_RUNNING) {
-				/* We want to quickly sample the PC. */
-				retval = target_halt(target);
-			} else {
-				LOG_INFO("Target not halted or running");
-				retval = ERROR_OK;
-				break;
-			}
+			target_read_u32(target, DWT_PCSR, &samples[sample_count++]);
 		}
 
 		if (retval != ERROR_OK) {
-			LOG_ERROR("Error while reading %s", use_pcsr ? "PCSR" : "target pc");
+			LOG_ERROR("Error while reading PCSR");
 			return retval;
 		}
 
@@ -1980,7 +1976,7 @@ static void cortex_m_dwt_addreg(struct target *t, struct reg *r, const struct dw
 {
 	struct dwt_reg_state *state;
 
-	state = calloc(1, sizeof *state);
+	state = calloc(1, sizeof(*state));
 	if (!state)
 		return;
 	state->addr = d->addr;
@@ -2021,7 +2017,7 @@ fail0:
 		return;
 	}
 
-	cache = calloc(1, sizeof *cache);
+	cache = calloc(1, sizeof(*cache));
 	if (!cache) {
 fail1:
 		free(cm->dwt_comparator_list);
@@ -2029,7 +2025,7 @@ fail1:
 	}
 	cache->name = "Cortex-M DWT registers";
 	cache->num_regs = 2 + cm->dwt_num_comp * 3;
-	cache->reg_list = calloc(cache->num_regs, sizeof *cache->reg_list);
+	cache->reg_list = calloc(cache->num_regs, sizeof(*cache->reg_list));
 	if (!cache->reg_list) {
 		free(cache);
 		goto fail1;
@@ -2149,16 +2145,24 @@ int cortex_m_examine(struct target *target)
 		/* Get CPU Type */
 		i = (cpuid >> 4) & 0xf;
 
+		/* Check if it is an ARMv8-M core */
+		armv7m->arm.is_armv8m = true;
+
 		switch (cpuid & ARM_CPUID_PARTNO_MASK) {
 			case CORTEX_M23_PARTNO:
 				i = 23;
 				break;
-
 			case CORTEX_M33_PARTNO:
 				i = 33;
 				break;
-
+			case CORTEX_M35P_PARTNO:
+				i = 35;
+				break;
+			case CORTEX_M55_PARTNO:
+				i = 55;
+				break;
 			default:
+				armv7m->arm.is_armv8m = false;
 				break;
 		}
 
@@ -2189,7 +2193,7 @@ int cortex_m_examine(struct target *target)
 				LOG_DEBUG("Cortex-M%d floating point feature FPv4_SP found", i);
 				armv7m->fp_feature = FPv4_SP;
 			}
-		} else if (i == 7 || i == 33) {
+		} else if (i == 7 || i == 33 || i == 35 || i == 55) {
 			target_read_u32(target, MVFR0, &mvfr0);
 			target_read_u32(target, MVFR1, &mvfr1);
 
@@ -2229,6 +2233,19 @@ int cortex_m_examine(struct target *target)
 			else if (i == 7)
 				/* Cortex-M7 has only 1024 bytes autoincrement range */
 				armv7m->debug_ap->tar_autoincr_block = (1 << 10);
+		}
+
+		/* Enable debug requests */
+		retval = target_read_u32(target, DCB_DHCSR, &cortex_m->dcb_dhcsr);
+		if (retval != ERROR_OK)
+			return retval;
+		if (!(cortex_m->dcb_dhcsr & C_DEBUGEN)) {
+			uint32_t dhcsr = (cortex_m->dcb_dhcsr | C_DEBUGEN) & ~(C_HALT | C_STEP | C_MASKINTS);
+
+			retval = target_write_u32(target, DCB_DHCSR, DBGKEY | (dhcsr & 0x0000FFFFUL));
+			if (retval != ERROR_OK)
+				return retval;
+			cortex_m->dcb_dhcsr = dhcsr;
 		}
 
 		/* Configure trace modules */
@@ -2460,6 +2477,11 @@ COMMAND_HANDLER(handle_cortex_m_vector_catch_command)
 	retval = cortex_m_verify_pointer(CMD, cortex_m);
 	if (retval != ERROR_OK)
 		return retval;
+
+	if (!target_was_examined(target)) {
+		LOG_ERROR("Target not examined yet");
+		return ERROR_FAIL;
+	}
 
 	retval = mem_ap_read_atomic_u32(armv7m->debug_ap, DCB_DEMCR, &demcr);
 	if (retval != ERROR_OK)

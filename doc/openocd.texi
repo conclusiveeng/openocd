@@ -505,6 +505,12 @@ Texas Instruments has an adapter called @b{ICDI}.
 It is not to be confused with the FTDI based adapters that were originally fitted to their
 evaluation boards. This is the adapter fitted to the Stellaris LaunchPad.
 
+@section USB Nuvoton Nu-Link
+Nuvoton has an adapter called @b{Nu-Link}.
+It is available either as stand-alone dongle and embedded on development boards.
+It supports SWD, serial port bridge and mass storage for firmware update.
+Both Nu-Link v1 and v2 are supported.
+
 @section USB CMSIS-DAP based
 ARM has released a interface standard called CMSIS-DAP that simplifies connecting
 debuggers to ARM Cortex based targets @url{http://www.keil.com/support/man/docs/dapdebug/dapdebug_introduction.htm}.
@@ -536,16 +542,8 @@ debuggers to ARM Cortex based targets @url{http://www.keil.com/support/man/docs/
 @* Link: @url{http://www.keil.com/ulink1/}
 
 @item @b{TI XDS110 Debug Probe}
-@* The XDS110 is included as the embedded debug probe on many Texas Instruments
-LaunchPad evaluation boards.
-@* The XDS110 is also available as a stand-alone USB debug probe. The XDS110
-stand-alone probe has the additional ability to supply voltage to the target
-board via its AUX FUNCTIONS port. Use the
-@command{xds110_supply_voltage <millivolts>} command to set the voltage. 0 turns
-off the supply. Otherwise, the supply can be set to any value in the range 1800
-to 3600 millivolts.
-@* Link: @url{http://processors.wiki.ti.com/index.php/XDS110}
-@* Link: @url{http://processors.wiki.ti.com/index.php/XDS_Emulation_Software_Package#XDS110_Support_Utilities}
+@* Link: @url{https://software-dl.ti.com/ccs/esd/documents/xdsdebugprobes/emu_xds110.html}
+@* Link: @url{https://software-dl.ti.com/ccs/esd/documents/xdsdebugprobes/emu_xds_software_package_download.html#xds110-support-utilities}
 @end itemize
 
 @section IBM PC Parallel Printer Port Based
@@ -617,8 +615,14 @@ produced, PDF schematics are easily found and it is easy to make.
 @* A JTAG driver acting as a client for the JTAG VPI server interface.
 @* Link: @url{http://github.com/fjullien/jtag_vpi}
 
+@item @b{jtag_dpi}
+@* A JTAG driver acting as a client for the SystemVerilog Direct Programming
+Interface (DPI) for JTAG devices. DPI allows OpenOCD to connect to the JTAG
+interface of a hardware model written in SystemVerilog, for example, on an
+emulation model of target hardware.
+
 @item @b{xlnx_pcie_xvc}
-@* A JTAG driver exposing Xilinx Virtual Cable over PCI Express to OpenOCD as JTAG interface.
+@* A JTAG driver exposing Xilinx Virtual Cable over PCI Express to OpenOCD as JTAG/SWD interface.
 
 @end itemize
 
@@ -720,8 +724,11 @@ Configuration files and scripts are searched for in
 @item the current directory,
 @item any search dir specified on the command line using the @option{-s} option,
 @item any search dir specified using the @command{add_script_search_dir} command,
-@item @file{$HOME/.openocd} (not on Windows),
 @item a directory in the @env{OPENOCD_SCRIPTS} environment variable (if set),
+@item @file{%APPDATA%/OpenOCD} (only on Windows),
+@item @file{$HOME/Library/Preferences/org.openocd} (only on Darwin),
+@item @file{$XDG_CONFIG_HOME/openocd} (@env{$XDG_CONFIG_HOME} defaults to @file{$HOME/.config}),
+@item @file{$HOME/.openocd},
 @item the site wide script library @file{$pkgdatadir/site} and
 @item the OpenOCD-supplied script library @file{$pkgdatadir/scripts}.
 @end enumerate
@@ -1028,7 +1035,7 @@ will help support users of any board using that chip.
 @end quotation
 
 @item
-You may may need to write some C code.
+You may need to write some C code.
 It may be as simple as supporting a new FT2232 or parport
 based adapter; a bit more involved, like a NAND or NOR flash
 controller driver; or a big piece of work like supporting
@@ -1482,7 +1489,7 @@ While the default is normally provided by the chip manufacturer,
 board files may need to distinguish between instances of a chip.
 @item @code{ENDIAN} ...
 By default @option{little} - although chips may hard-wire @option{big}.
-Chips that can't change endianess don't need to use this variable.
+Chips that can't change endianness don't need to use this variable.
 @item @code{CPUTAPID} ...
 When OpenOCD examines the JTAG chain, it can be told verify the
 chips against the JTAG IDCODE register.
@@ -3072,7 +3079,8 @@ This is a driver that supports multiple High Level Adapters.
 This type of adapter does not expose some of the lower level api's
 that OpenOCD would normally use to access the target.
 
-Currently supported adapters include the STMicroelectronics ST-LINK and TI ICDI.
+Currently supported adapters include the STMicroelectronics ST-LINK, TI ICDI
+and Nuvoton Nu-Link.
 ST-LINK firmware version >= V2.J21.S4 recommended due to issues with earlier
 versions of firmware where serial number is reset after first use.  Suggest
 using ST firmware update utility to upgrade ST-LINK firmware even if current
@@ -3086,7 +3094,7 @@ Currently Not Supported.
 Specifies the serial number of the adapter.
 @end deffn
 
-@deffn {Config Command} {hla_layout} (@option{stlink}|@option{icdi})
+@deffn {Config Command} {hla_layout} (@option{stlink}|@option{icdi}|@option{nulink})
 Specifies the adapter layout to use.
 @end deffn
 
@@ -3131,10 +3139,33 @@ opendous-jtag is a freely programmable USB adapter.
 This is the Keil ULINK v1 JTAG debugger.
 @end deffn
 
+@deffn {Interface Driver} {xds110}
+The XDS110 is included as the embedded debug probe on many Texas Instruments
+LaunchPad evaluation boards. The XDS110 is also available as a stand-alone USB
+debug probe with the added capability to supply power to the target board. The
+following commands are supported by the XDS110 driver:
+
+@deffn {Config Command} {xds110 serial} serial_string
+Specifies the serial number of which XDS110 probe to use. Otherwise, the first
+XDS110 found will be used.
+@end deffn
+
+@deffn {Config Command} {xds110 supply} voltage_in_millivolts
+Available only on the XDS110 stand-alone probe. Sets the voltage level of the
+XDS110 power supply. A value of 0 leaves the supply off. Otherwise, the supply
+can be set to any value in the range 1800 to 3600 millivolts.
+@end deffn
+
+@deffn {Command} {xds110 info}
+Displays information about the connected XDS110 debug probe (e.g. firmware
+version).
+@end deffn
+@end deffn
+
 @deffn {Interface Driver} {xlnx_pcie_xvc}
 This driver supports the Xilinx Virtual Cable (XVC) over PCI Express.
 It is commonly found in Xilinx based PCI Express designs. It allows debugging
-fabric based JTAG devices such as Cortex-M1/M3 microcontrollers. Access to this is
+fabric based JTAG/SWD devices such as Cortex-M1/M3 microcontrollers. Access to this is
 exposed via extended capability registers in the PCI Express configuration space.
 
 For more information see Xilinx PG245 (Section on From_PCIE_to_JTAG mode).
@@ -3213,6 +3244,22 @@ This value is only used with the standard variant.
 @end deffn
 @end deffn
 
+
+@deffn {Interface Driver} {jtag_dpi}
+SystemVerilog Direct Programming Interface (DPI) compatible driver for
+JTAG devices in emulation. The driver acts as a client for the SystemVerilog
+DPI server interface.
+
+@deffn {Config Command} {jtag_dpi_set_port} port
+Specifies the TCP/IP port number of the SystemVerilog DPI server interface.
+@end deffn
+
+@deffn {Config Command} {jtag_dpi_set_address} address
+Specifies the TCP/IP address of the SystemVerilog DPI server interface.
+@end deffn
+@end deffn
+
+
 @section Transport Configuration
 @cindex Transport
 As noted earlier, depending on the version of OpenOCD you use,
@@ -3288,6 +3335,24 @@ No parameters: displays current settings.
 The Serial Peripheral Interface (SPI) is a general purpose transport
 which uses four wire signaling. Some processors use it as part of a
 solution for flash programming.
+
+@anchor{swimtransport}
+@subsection SWIM Transport
+@cindex SWIM
+@cindex Single Wire Interface Module
+The Single Wire Interface Module (SWIM) is a low-pin-count debug protocol used
+by the STMicroelectronics MCU family STM8 and documented in the
+@uref{https://www.st.com/resource/en/user_manual/cd00173911.pdf, User Manual UM470}.
+
+SWIM does not support boundary scan testing nor multiple cores.
+
+The SWIM transport is selected with the command @command{transport select swim}.
+
+The concept of TAPs does not fit in the protocol since SWIM does not implement
+a scan chain. Nevertheless, the current SW model of OpenOCD requires defining a
+virtual SWIM TAP through the command @command{swim newtap basename tap_type}.
+The TAP definition must precede the target definition command
+@command{target create target_name stm8 -chain-position basename.tap_type}.
 
 @anchor{jtagspeed}
 @section JTAG Speed
@@ -4400,34 +4465,41 @@ Lists all supported target types.
 At this writing, the supported CPU types are:
 
 @itemize @bullet
-@item @code{arm11} -- this is a generation of ARMv6 cores
-@item @code{arm720t} -- this is an ARMv4 core with an MMU
-@item @code{arm7tdmi} -- this is an ARMv4 core
-@item @code{arm920t} -- this is an ARMv4 core with an MMU
-@item @code{arm926ejs} -- this is an ARMv5 core with an MMU
-@item @code{arm966e} -- this is an ARMv5 core
-@item @code{arm9tdmi} -- this is an ARMv4 core
+@item @code{aarch64} -- this is an ARMv8-A core with an MMU.
+@item @code{arm11} -- this is a generation of ARMv6 cores.
+@item @code{arm720t} -- this is an ARMv4 core with an MMU.
+@item @code{arm7tdmi} -- this is an ARMv4 core.
+@item @code{arm920t} -- this is an ARMv4 core with an MMU.
+@item @code{arm926ejs} -- this is an ARMv5 core with an MMU.
+@item @code{arm946e} -- this is an ARMv5 core with an MMU.
+@item @code{arm966e} -- this is an ARMv5 core.
+@item @code{arm9tdmi} -- this is an ARMv4 core.
 @item @code{avr} -- implements Atmel's 8-bit AVR instruction set.
 (Support for this is preliminary and incomplete.)
-@item @code{cortex_a} -- this is an ARMv7 core with an MMU
-@item @code{cortex_m} -- this is an ARMv7 core, supporting only the
-compact Thumb2 instruction set.
-@item @code{aarch64} -- this is an ARMv8-A core with an MMU
-@item @code{dragonite} -- resembles arm966e
+@item @code{avr32_ap7k} -- this an AVR32 core.
+@item @code{cortex_a} -- this is an ARMv7-A core with an MMU.
+@item @code{cortex_m} -- this is an ARMv7-M core, supporting only the
+compact Thumb2 instruction set. Supports also ARMv6-M and ARMv8-M cores
+@item @code{cortex_r4} -- this is an ARMv7-R core.
+@item @code{dragonite} -- resembles arm966e.
 @item @code{dsp563xx} -- implements Freescale's 24-bit DSP.
 (Support for this is still incomplete.)
+@item @code{dsp5680xx} -- implements Freescale's 5680x DSP.
 @item @code{esirisc} -- this is an EnSilica eSi-RISC core.
 The current implementation supports eSi-32xx cores.
-@item @code{fa526} -- resembles arm920 (w/o Thumb)
-@item @code{feroceon} -- resembles arm926
-@item @code{mem_ap} -- this is an ARM debug infrastructure Access Port without a CPU, through which bus read and write cycles can be generated; it may be useful for working with non-CPU hardware behind an AP or during development of support for new CPUs.
-@item @code{mips_m4k} -- a MIPS core
-@item @code{xscale} -- this is actually an architecture,
-not a CPU type. It is based on the ARMv5 architecture.
-@item @code{openrisc} -- this is an OpenRISC 1000 core.
-The current implementation supports three JTAG TAP cores:
+@item @code{fa526} -- resembles arm920 (w/o Thumb).
+@item @code{feroceon} -- resembles arm926.
+@item @code{hla_target} -- a Cortex-M alternative to work with HL adapters like ST-Link.
 @item @code{ls1_sap} -- this is the SAP on NXP LS102x CPUs,
 allowing access to physical memory addresses independently of CPU cores.
+@item @code{mem_ap} -- this is an ARM debug infrastructure Access Port without a CPU, through which bus read and write cycles can be generated; it may be useful for working with non-CPU hardware behind an AP or during development of support for new CPUs.
+@item @code{mips_m4k} -- a MIPS core.
+@item @code{mips_mips64} -- a MIPS64 core.
+@item @code{nds32_v2} -- this is an Andes NDS32 v2 core.
+@item @code{nds32_v3} -- this is an Andes NDS32 v3 core.
+@item @code{nds32_v3m} -- this is an Andes NDS32 v3m core.
+@item @code{or1k} -- this is an OpenRISC 1000 core.
+The current implementation supports three JTAG TAP cores:
 @itemize @minus
 @item @code{OpenCores TAP} (See: @url{http://opencores.org/project@comma{}jtag})
 @item @code{Altera Virtual JTAG TAP} (See: @url{http://www.altera.com/literature/ug/ug_virtualjtag.pdf})
@@ -4438,6 +4510,13 @@ And two debug interfaces cores:
 @item @code{Advanced debug interface} (See: @url{http://opencores.org/project@comma{}adv_debug_sys})
 @item @code{SoC Debug Interface} (See: @url{http://opencores.org/project@comma{}dbg_interface})
 @end itemize
+@item @code{quark_d20xx} -- an Intel Quark D20xx core.
+@item @code{quark_x10xx} -- an Intel Quark X10xx core.
+@item @code{riscv} -- a RISC-V core.
+@item @code{stm8} -- implements an STM8 core.
+@item @code{testee} -- a dummy target for cases without a real CPU, e.g. CPLD.
+@item @code{xscale} -- this is actually an architecture,
+not a CPU type. It is based on the ARMv5 architecture.
 @end itemize
 @end deffn
 
@@ -4590,7 +4669,8 @@ The value should normally correspond to a static mapping for the
 @item @code{-rtos} @var{rtos_type} -- enable rtos support for target,
 @var{rtos_type} can be one of @option{auto}, @option{eCos},
 @option{ThreadX}, @option{FreeRTOS}, @option{linux}, @option{ChibiOS},
-@option{embKernel}, @option{mqx}, @option{uCOS-III}, @option{nuttx}
+@option{embKernel}, @option{mqx}, @option{uCOS-III}, @option{nuttx},
+@option{RIOT}
 @xref{gdbrtossupport,,RTOS Support}.
 
 @item @code{-defer-examine} -- skip target examination at initial JTAG chain
@@ -4900,6 +4980,10 @@ when reset disables PLLs needed to use a fast clock.
 @* After all targets have resumed
 @item @b{resumed}
 @* Target has resumed
+@item @b{step-start}
+@* Before a target is single-stepped
+@item @b{step-end}
+@* After single-step has completed
 @item @b{trace-config}
 @* After target hardware trace configuration was changed
 @end itemize
@@ -5092,6 +5176,19 @@ The flash bank to use is inferred from the @var{address} of
 each block, and the specified length must stay within that bank.
 @end deffn
 @comment no current checks for errors if fill blocks touch multiple banks!
+
+@deffn Command {flash mdw} addr [count]
+@deffnx Command {flash mdh} addr [count]
+@deffnx Command {flash mdb} addr [count]
+Display contents of address @var{addr}, as
+32-bit words (@command{mdw}), 16-bit halfwords (@command{mdh}),
+or 8-bit bytes (@command{mdb}).
+If @var{count} is specified, displays that many units.
+Reads from flash using the flash driver, therefore it enables reading
+from a bank not mapped in target address space.
+The flash bank to use is inferred from the @var{address} of
+each block, and the specified length must stay within that bank.
+@end deffn
 
 @deffn Command {flash write_bank} num filename [offset]
 Write the binary @file{filename} to flash bank @var{num},
@@ -5597,7 +5694,7 @@ at91samd bootloader 16384
 @deffn Command {at91samd dsu_reset_deassert}
 This command releases internal reset held by DSU
 and prepares reset vector catch in case of reset halt.
-Command is used internally in event event reset-deassert-post.
+Command is used internally in event reset-deassert-post.
 @end deffn
 
 @deffn Command {at91samd nvmuserrow}
@@ -5704,7 +5801,7 @@ The AT91SAM4L driver adds some additional commands:
 @deffn Command {at91sam4l smap_reset_deassert}
 This command releases internal reset held by SMAP
 and prepares reset vector catch in case of reset halt.
-Command is used internally in event event reset-deassert-post.
+Command is used internally in event reset-deassert-post.
 @end deffn
 @end deffn
 
@@ -5745,7 +5842,7 @@ processor to be halted.
 @deffn Command {atsame5 dsu_reset_deassert}
 This command releases internal reset held by DSU
 and prepares reset vector catch in case of reset halt.
-Command is used internally in event event reset-deassert-post.
+Command is used internally in event reset-deassert-post.
 @end deffn
 
 @deffn Command {atsame5 userpage}
@@ -6413,7 +6510,7 @@ code.
 @end deffn
 
 @deffn Command {nrf5 info}
-Decodes and shows informations from FICR and UICR registers.
+Decodes and shows information from FICR and UICR registers.
 @end deffn
 
 @end deffn
@@ -6892,7 +6989,7 @@ The @var{num} parameter is a value shown by @command{flash banks}.
 @end deffn
 
 @deffn {Flash Driver} stm32l4x
-All members of the STM32L4, STM32L4+, STM32WB and STM32G4
+All members of the STM32L4, STM32L4+, STM32WB, STM32WL and STM32G4
 microcontroller families from STMicroelectronics include internal flash
 and use ARM Cortex-M4 cores.
 Additionally this driver supports STM32G0 family with ARM Cortex-M0+ core.
@@ -8163,8 +8260,8 @@ in which case it will be a hardware breakpoint.
 for similar mechanisms that do not consume hardware breakpoints.)
 @end deffn
 
-@deffn Command {rbp} address
-Remove the breakpoint at @var{address}.
+@deffn Command {rbp} @option{all} | address
+Remove the breakpoint at @var{address} or all breakpoints.
 @end deffn
 
 @deffn Command {rwp} address
@@ -8328,7 +8425,7 @@ and any buffered trace data is invalidated.
 
 @itemize
 @item @var{type} ... describing how data accesses are traced,
-when they pass any ViewData filtering that that was set up.
+when they pass any ViewData filtering that was set up.
 The value is one of
 @option{none} (save nothing),
 @option{data} (save data),
@@ -8676,7 +8773,7 @@ and any other core-specific commands that may be available.
 
 @deffn Command {arm7_9 dbgrq} [@option{enable}|@option{disable}]
 Displays the value of the flag controlling use of the
-the EmbeddedIce DBGRQ signal to force entry into debug mode,
+EmbeddedIce DBGRQ signal to force entry into debug mode,
 instead of breakpoints.
 If a boolean parameter is provided, first assigns that flag.
 
@@ -9277,6 +9374,12 @@ target code relies on. In a configuration file, the command would typically be c
 However, normally it is not necessary to use the command at all.
 @end deffn
 
+@deffn Command {aarch64 disassemble} address [count]
+@cindex disassemble
+Disassembles @var{count} instructions starting at @var{address}.
+If @var{count} is not specified, a single instruction is disassembled.
+@end deffn
+
 @deffn Command {aarch64 smp} [on|off]
 Display, enable or disable SMP handling mode. The state of SMP handling influences the way targets in an SMP group
 are handled by the run control. With SMP handling enabled, issuing halt or resume to one core will trigger
@@ -9611,8 +9714,31 @@ This is used to access 64-bit floating point registers on 32-bit targets.
 @end deffn
 
 @deffn Command {riscv set_prefer_sba} on|off
-When on, prefer to use System Bus Access to access memory.  When off, prefer to
-use the Program Buffer to access memory.
+When on, prefer to use System Bus Access to access memory.  When off (default),
+prefer to use the Program Buffer to access memory.
+@end deffn
+
+@deffn Command {riscv set_enable_virtual} on|off
+When on, memory accesses are performed on physical or virtual memory depending
+on the current system configuration. When off (default), all memory accessses are performed
+on physical memory.
+@end deffn
+
+@deffn Command {riscv set_enable_virt2phys} on|off
+When on (default), memory accesses are performed on physical or virtual memory
+depending on the current satp configuration. When off, all memory accessses are
+performed on physical memory.
+@end deffn
+
+@deffn Command {riscv resume_order} normal|reversed
+Some software assumes all harts are executing nearly continuously. Such
+software may be sensitive to the order that harts are resumed in. On harts
+that don't support hasel, this option allows the user to choose the order the
+harts are resumed in. If you are using this option, it's probably masking a
+race condition problem in your code.
+
+Normal order is from lowest hart index to highest. This is the default
+behavior. Reversed order is from highest hart index to lowest.
 @end deffn
 
 @deffn Command {riscv set_ir} (@option{idcode}|@option{dtmcs}|@option{dmi}) [value]
@@ -9624,6 +9750,26 @@ values.
 When utilizing version 0.11 of the RISC-V Debug Specification,
 @option{dtmcs} and @option{dmi} set the IR values for the DTMCONTROL
 and DBUS registers, respectively.
+@end deffn
+
+@deffn Command {riscv use_bscan_tunnel} value
+Enable or disable use of a BSCAN tunnel to reach DM.  Supply the width of
+the DM transport TAP's instruction register to enable.  Supply a value of 0 to disable.
+@end deffn
+
+@deffn Command {riscv set_ebreakm} on|off
+Control dcsr.ebreakm. When on (default), M-mode ebreak instructions trap to
+OpenOCD. When off, they generate a breakpoint exception handled internally.
+@end deffn
+
+@deffn Command {riscv set_ebreaks} on|off
+Control dcsr.ebreaks. When on (default), S-mode ebreak instructions trap to
+OpenOCD. When off, they generate a breakpoint exception handled internally.
+@end deffn
+
+@deffn Command {riscv set_ebreaku} on|off
+Control dcsr.ebreaku. When on (default), U-mode ebreak instructions trap to
+OpenOCD. When off, they generate a breakpoint exception handled internally.
 @end deffn
 
 @subsection RISC-V Authentication Commands
@@ -9649,13 +9795,148 @@ Write the 32-bit value to authdata.
 The following commands allow direct access to the Debug Module Interface, which
 can be used to interact with custom debug features.
 
-@deffn Command {riscv dmi_read}
+@deffn Command {riscv dmi_read} address
 Perform a 32-bit DMI read at address, returning the value.
 @end deffn
 
 @deffn Command {riscv dmi_write} address value
 Perform a 32-bit DMI write of value at address.
 @end deffn
+
+@section ARC Architecture
+@cindex ARC
+
+Synopsys DesignWare ARC Processors are a family of 32-bit CPUs that SoC
+designers can optimize for a wide range of uses, from deeply embedded to
+high-performance host applications in a variety of market segments. See more
+at: http://www.synopsys.com/IP/ProcessorIP/ARCProcessors/Pages/default.aspx.
+OpenOCD currently supports ARC EM processors.
+There is a set ARC-specific OpenOCD commands that allow low-level
+access to the core and provide necessary support for ARC extensibility and
+configurability capabilities. ARC processors has much more configuration
+capabilities than most of the other processors and in addition there is an
+extension interface that allows SoC designers to add custom registers and
+instructions. For the OpenOCD that mostly means that set of core and AUX
+registers in target will vary and is not fixed for a particular processor
+model. To enable extensibility several TCL commands are provided that allow to
+describe those optional registers in OpenOCD configuration files. Moreover
+those commands allow for a dynamic target features discovery.
+
+
+@subsection General ARC commands
+
+@deffn {Config Command} {arc add-reg} configparams
+
+Add a new register to processor target. By default newly created register is
+marked as not existing. @var{configparams} must have following required
+arguments:
+
+@itemize @bullet
+
+@item @code{-name} name
+@*Name of a register.
+
+@item @code{-num} number
+@*Architectural register number: core register number or AUX register number.
+
+@item @code{-feature} XML_feature
+@*Name of GDB XML target description feature.
+
+@end itemize
+
+@var{configparams} may have following optional arguments:
+
+@itemize @bullet
+
+@item @code{-gdbnum} number
+@*GDB register number. It is recommended to not assign GDB register number
+manually, because there would be a risk that two register will have same
+number. When register GDB number is not set with this option, then register
+will get a previous register number + 1. This option is required only for those
+registers that must be at particular address expected by GDB.
+
+@item @code{-core}
+@*This option specifies that register is a core registers. If not - this is an
+AUX register. AUX registers and core registers reside in different address
+spaces.
+
+@item @code{-bcr}
+@*This options specifies that register is a BCR register. BCR means Build
+Configuration Registers - this is a special type of AUX registers that are read
+only and non-volatile, that is - they never change their value. Therefore OpenOCD
+never invalidates values of those registers in internal caches. Because BCR is a
+type of AUX registers, this option cannot be used with @code{-core}.
+
+@item @code{-type} type_name
+@*Name of type of this register. This can be either one of the basic GDB types,
+or a custom types described with @command{arc add-reg-type-[flags|struct]}.
+
+@item @code{-g}
+@* If specified then this is a "general" register. General registers are always
+read by OpenOCD on context save (when core has just been halted) and is always
+transferred to GDB client in a response to g-packet. Contrary to this,
+non-general registers are read and sent to GDB client on-demand. In general it
+is not recommended to apply this option to custom registers.
+
+@end itemize
+
+@end deffn
+
+@deffn {Config Command} {arc add-reg-type-flags} -name name flags...
+Adds new register type of ``flags'' class. ``Flags'' types can contain only
+one-bit fields. Each flag definition looks like @code{-flag name bit-position}.
+@end deffn
+
+@anchor{add-reg-type-struct}
+@deffn {Config Command} {arc add-reg-type-struct} -name name structs...
+Adds new register type of ``struct'' class. ``Struct'' types can contain either
+bit-fields or fields of other types, however at the moment only bit fields are
+supported. Structure bit field definition looks like @code{-bitfield name
+startbit endbit}.
+@end deffn
+
+@deffn {Command} {arc get-reg-field} reg-name field-name
+Returns value of bit-field in a register. Register must be ``struct'' register
+type, @xref{add-reg-type-struct} command definition.
+@end deffn
+
+@deffn {Command} {arc set-reg-exists} reg-names...
+Specify that some register exists. Any amount of names can be passed
+as an argument for a single command invocation.
+@end deffn
+
+@subsection ARC JTAG commands
+
+@deffn {Command} {arc jtag set-aux-reg} regnum value
+This command writes value to AUX register via its number. This command access
+register in target directly via JTAG, bypassing any OpenOCD internal caches,
+therefore it is unsafe to use if that register can be operated by other means.
+
+@end deffn
+
+@deffn {Command} {arc jtag set-core-reg} regnum value
+This command is similar to @command{arc jtag set-aux-reg} but is for core
+registers.
+@end deffn
+
+@deffn {Command} {arc jtag get-aux-reg} regnum
+This command returns the value storded in AUX register via its number. This commands access
+register in target directly via JTAG, bypassing any OpenOCD internal caches,
+therefore it is unsafe to use if that register can be operated by other means.
+
+@end deffn
+
+@deffn {Command} {arc jtag get-core-reg} regnum
+This command is similar to @command{arc jtag get-aux-reg} but is for core
+registers.
+@end deffn
+
+@section STM8 Architecture
+@uref{http://st.com/stm8/, STM8} is a 8-bit microcontroller platform from
+STMicroelectronics, based on a proprietary 8-bit core architecture.
+
+OpenOCD supports debugging STM8 through the STMicroelectronics debug
+protocol SWIM, @pxref{swimtransport,,SWIM}.
 
 @anchor{softwaredebugmessagesandtracing}
 @section Software Debug Messages and Tracing
@@ -10138,18 +10419,31 @@ OpenOCD can communicate with GDB in two ways:
 @item
 A socket (TCP/IP) connection is typically started as follows:
 @example
-target remote localhost:3333
+target extended-remote localhost:3333
 @end example
 This would cause GDB to connect to the gdbserver on the local pc using port 3333.
 
-It is also possible to use the GDB extended remote protocol as follows:
+The extended remote protocol is a super-set of the remote protocol and should
+be the preferred choice. More details are available in GDB documentation
+@url{https://sourceware.org/gdb/onlinedocs/gdb/Connecting.html}
+
+To speed-up typing, any GDB command can be abbreviated, including the extended
+remote command above that becomes:
 @example
-target extended-remote localhost:3333
+tar ext :3333
 @end example
+
+@b{Note:} If any backward compatibility issue requires using the old remote
+protocol in place of the extended remote one, the former protocol is still
+available through the command:
+@example
+target remote localhost:3333
+@end example
+
 @item
 A pipe connection is typically started as follows:
 @example
-target remote | openocd -c "gdb_port pipe; log_output openocd.log"
+target extended-remote | openocd -c "gdb_port pipe; log_output openocd.log"
 @end example
 This would cause GDB to run OpenOCD and communicate using pipes (stdin/stdout).
 Using this method has the advantage of GDB starting/stopping OpenOCD for the debug
@@ -10171,7 +10465,7 @@ Most programs would be written into flash (address 0) and run from there.
 
 @example
 $ arm-none-eabi-gdb example.elf
-(gdb) target remote localhost:3333
+(gdb) target extended-remote localhost:3333
 Remote debugging using localhost:3333
 ...
 (gdb) monitor reset halt
@@ -10306,7 +10600,7 @@ set remote interrupt-on-connect off
 If you switched gdb_memory_map off, you may want to setup GDB memory map
 manually or issue @command{set mem inaccessible-by-default off}
 
-Now you can issue GDB command @command{target remote ...} and inspect memory
+Now you can issue GDB command @command{target extended-remote ...} and inspect memory
 of a running target. Do not use GDB commands @command{continue},
 @command{step} or @command{next} as they synchronize GDB with your target
 and GDB would require stopping the target to get the prompt back.
@@ -10344,6 +10638,7 @@ Currently supported rtos's include:
 @item @option{mqx}
 @item @option{uCOS-III}
 @item @option{nuttx}
+@item @option{RIOT}
 @item @option{hwthread} (This is not an actual RTOS. @xref{usingopenocdsmpwithgdb,,Using OpenOCD SMP with GDB}.)
 @end itemize
 
@@ -10380,6 +10675,8 @@ _mqx_kernel_data, MQX_init_struct.
 OSRunning, OSTCBCurPtr, OSTaskDbgListPtr, OSTaskQty
 @item nuttx symbols
 g_readytorun, g_tasklisttable
+@item RIOT symbols
+sched_threads, sched_num_threads, sched_active_pid, max_threads, _tcb_name_offset
 @end table
 
 For most RTOS supported the above symbols will be exported by default. However for

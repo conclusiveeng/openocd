@@ -449,7 +449,7 @@ static int openjtag_init_cy7c65215(void)
 	int ret;
 
 	usbh = NULL;
-	ret = jtag_libusb_open(cy7c65215_vids, cy7c65215_pids, NULL, &usbh);
+	ret = jtag_libusb_open(cy7c65215_vids, cy7c65215_pids, NULL, &usbh, NULL);
 	if (ret != ERROR_OK) {
 		LOG_ERROR("unable to open cy7c65215 device");
 		goto err;
@@ -591,8 +591,7 @@ static int openjtag_execute_tap_queue(void)
 #endif
 			jtag_read_buffer(buffer, openjtag_scan_result_buffer[res_count].command);
 
-			if (openjtag_scan_result_buffer[res_count].buffer)
-				free(openjtag_scan_result_buffer[res_count].buffer);
+			free(openjtag_scan_result_buffer[res_count].buffer);
 
 			res_count++;
 		}
