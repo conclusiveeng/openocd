@@ -1145,6 +1145,7 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 	struct arm *arm = &armv7a->arm;
 	struct breakpoint *breakpoint = NULL;
 	struct breakpoint stepbreakpoint;
+	struct breakpoint stepbreakpoint2;
 	struct reg *r;
 	int retval;
 
@@ -1178,6 +1179,7 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 		? 2 : 4;
 	stepbreakpoint.type = BKPT_HARD;
 	stepbreakpoint.set = 0;
+	stepbreakpoint2 = stepbreakpoint;
 
 	/* Disable interrupts during single step if requested */
 	if (cortex_a->isrmasking_mode == CORTEX_A_ISRMASK_ON) {
@@ -1188,6 +1190,12 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 
 	/* Break on IVA mismatch */
 	cortex_a_set_breakpoint(target, &stepbreakpoint, 0x04);
+
+	/*
+	 * Break on IVA match. We need this to reliably step over
+	 * while(1) loops that consist of just one branch instruction.
+	 */
+	cortex_a_set_breakpoint(target, &stepbreakpoint2, 0x00);
 
 	target->debug_reason = DBG_REASON_SINGLESTEP;
 
@@ -1209,6 +1217,7 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 	}
 
 	cortex_a_unset_breakpoint(target, &stepbreakpoint);
+	cortex_a_unset_breakpoint(target, &stepbreakpoint2);
 
 	/* Re-enable interrupts if they were disabled */
 	if (cortex_a->isrmasking_mode == CORTEX_A_ISRMASK_ON) {
@@ -1216,7 +1225,6 @@ static int cortex_a_step(struct target *target, int current, target_addr_t addre
 		if (ERROR_OK != retval)
 			return retval;
 	}
-
 
 	target->debug_reason = DBG_REASON_BREAKPOINT;
 
