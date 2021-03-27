@@ -1,4 +1,4 @@
-add_library(helper
+add_library(helper STATIC
 	binarybuffer.c
 	command.c
 	configuration.c
@@ -13,3 +13,5 @@ add_library(helper
 	time_support.c
 	time_support_common.c
 	util.c)
+
+set_property(TARGET helper PROPERTY POSITION_INDEPENDENT_CODE ON)

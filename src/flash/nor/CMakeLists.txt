@@ -67,3 +67,6 @@ add_library(flash_nor
 	xcf.c
 	xmc1xxx.c
 	xmc4xxx.c)
+
+set_property(TARGET flash_nor PROPERTY POSITION_INDEPENDENT_CODE ON)
+

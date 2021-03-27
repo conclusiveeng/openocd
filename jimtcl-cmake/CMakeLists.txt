@@ -58,6 +58,8 @@ add_library(jim STATIC ${jimtcl_generated_sources}
 	../jimtcl/jim-nosignal.c
 	../jimtcl/jimiocompat.c
 	_load-static-exts.c)
-	
+
+set_property(TARGET jim PROPERTY POSITION_INDEPENDENT_CODE ON)
+
 add_executable(jimsh ../jimtcl/jimsh.c initjimsh.c)
 target_link_libraries(jimsh jim dl)

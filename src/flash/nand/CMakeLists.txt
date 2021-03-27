@@ -21,3 +21,6 @@ add_library(flash_nand
 	s3c24xx.c
 	s3c6400.c
 	tcl.c)
+
+set_property(TARGET flash_nand PROPERTY POSITION_INDEPENDENT_CODE ON)
+

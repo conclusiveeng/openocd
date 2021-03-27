@@ -13,3 +13,6 @@ add_library(jtag STATIC
 	interfaces.c
 	swim.c
 	tcl.c)
+
+set_property(TARGET jtag PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(jtag drivers)
