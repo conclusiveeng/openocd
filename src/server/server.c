@@ -713,6 +713,7 @@ void server_free(void)
 	jsp_service_free();
 
 	free(bindto_name);
+	bindto_name = NULL;
 }
 
 void exit_on_signal(int sig)

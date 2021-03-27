@@ -10,7 +10,7 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 include_directories(${LIBUSB_INCLUDE_DIRS})
 link_directories(${LIBUSB_LIBRARY_DIRS})
 
-add_definitions(-DHAVE_CONFIG_H -DPKGDATADIR="../../share/openocd" -DBINDIR="../../bin" -D__USE_MINGW_ANSI_STDIO=1)
+add_definitions(-DHAVE_CONFIG_H -DPKGDATADIR="../share/openocd" -DBINDIR="../bin" -D__USE_MINGW_ANSI_STDIO=1)
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${LIBUSB1_INCLUDE_DIR} ${HIDAPI_INCLUDE_DIR})
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Werror=incompatible-pointer-types")
 
