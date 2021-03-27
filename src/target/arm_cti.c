@@ -228,6 +228,7 @@ int arm_cti_cleanup_all(void)
 	struct arm_cti_object *obj, *tmp;
 
 	list_for_each_entry_safe(obj, tmp, &all_cti, lh) {
+		list_del(&obj->lh);
 		free(obj->name);
 		free(obj);
 	}

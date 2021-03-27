@@ -144,6 +144,7 @@ int dap_cleanup_all(void)
 		if (dap->ops && dap->ops->quit)
 			dap->ops->quit(dap);
 
+		list_del(&obj->lh);
 		free(obj->name);
 		free(obj);
 	}
